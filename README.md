@@ -1,0 +1,1 @@
+# kafka-ssl-architecture
