@@ -1,0 +1,230 @@
+installation steps:
+===================
+kafka is written in java and scala language
+Scala 2.13  - kafka_2.13-3.5.1.tgz (asc, sha512)
+- here kafka version is 3.5.1 and scala version is 2.13
+
+
+- take t2.medium instance in aws
+- allow 80,2181,9092 ports
+- install java8 or above
+sudo yum install java-11-amazon-corretto-headless
+
+- in 3.0.0 or above kafka version, zookeeper comes by default
+Apache Kafka depends on Zookeeper for cluster management. Hence, prior to starting Kafka, Zookeeper has to be started. There is no need to explicitly install Zookeeper, as it comes included with Apache Kafka.
+- during coming days in 4.0.0 versions, there is no need of zookeeper
+
+
+INSTALL ZOOKEEPER:
+==================
+- download kafka from official page
+mkdir kafka 
+cd kafka
+sudo chown -R ec2-user:ec2-user /home/ec2-user/kafka
+wget https://downloads.apache.org/kafka/3.5.1/kafka_2.13-3.5.1.tgz
+tar -xvf kafka_2.13-3.5.1.tgz
+chmod -R u+x /home/ec2-user/kafka/kafka_2.13-3.5.1
+sudo chmod -R u+x /home/ec2-user/kafka/kafka_2.13-3.5.1
+cd /kafka/kafka_2.13-3.5.1/config
+
+sudo vi zookeeper.properties
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir=/tmp/zookeeper
+clientPort=2181
+maxClientCnxns=0
+admin.enableServer=false
+4lw.commands.whitelist=*
+
+
+START ZOOKEEPER
+================
+cd /kafka/kafka_2.13-3.5.1/bin
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/zookeeper-server-start.sh /home/ec2-user/kafka/kafka_2.13-3.5.1/config/zookeeper.properties 
+the above command starts zookeeper in foreground, if you want to start in background, then use -daemon
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/zookeeper-server-start.sh -daemon /home/ec2-user/kafka/kafka_2.13-3.5.1/config/zookeeper.properties 
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/zookeeper-server-stop.sh -daemon /home/ec2-user/kafka/kafka_2.13-3.5.1/config/zookeeper.properties
+
+
+ZOOKEEPER LOGS
+==============
+zookeeper logs will be found in 
+/home/ec2-user/kafka/kafka_2.13-3.5.1/logs
+tail -f /home/ec2-user/kafka/kafka_2.13-3.5.1/logs/zookeeper.out
+tail -f -n 100 /home/ec2-user/kafka/kafka_2.13-3.5.1/logs/zookeeper.out
+ps -ef | grep zookeeper
+netstat -tulpn | grep LISTEN
+sudo yum install nc
+echo stat | nc localhost 2181
+- above command 'stat' which is 4 letter(4lw.commands.whitelist=*) is removed from whitelist, but by default they are whitelisted for security reasons.
+
+[ec2-user@ip-172-31-12-201 logs]$ echo stat | nc localhost 2181
+Zookeeper version: 3.6.4--d65253dcf68e9097c6e95a126463fd5fdeb4521c, built on 12/18/2022 18:10 GMT
+Clients:
+ /127.0.0.1:36368[0](queued=0,recved=1,sent=0)
+Latency min/avg/max: 0/0.0/0
+Received: 1
+Sent: 0
+Connections: 1
+Outstanding: 0
+Zxid: 0x0
+Mode: standalone         --- means single node zookeeper
+Node count: 5
+
+
+START KAFKA:
+===========
+vi /home/ec2-user/kafka/kafka_2.13-3.5.1/config/server.properties
+broker.id=0
+listeners=PLAINTEXT://localhost:9092
+num.network.threads=3
+num.io.threads=8
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+log.dirs=/home/ec2-user/kafka/kafka-dir
+num.partitions=1
+num.recovery.threads.per.data.dir=1
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+log.retention.hours=168
+log.retention.check.interval.ms=300000
+zookeeper.connect=localhost:2181
+zookeeper.connection.timeout.ms=18000
+group.initial.rebalance.delay.ms=0
+
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-server-start.sh /home/ec2-user/kafka/kafka_2.13-3.5.1/config/server.properties
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-server-start.sh -daemon /home/ec2-user/kafka/kafka_2.13-3.5.1/config/server.properties
+
+tail -f -n 100 /home/ec2-user/kafka/kafka_2.13-3.5.1/logs/server.log
+
+[2023-07-30 18:25:45,935] INFO [KafkaServer id=0] started (kafka.server.KafkaServer)
+[2023-07-30 18:25:46,149] INFO [zk-broker-0-to-controller-forwarding-channel-manager]: Recorded new controller, from now on will use node localhost:9092 (id: 0 rack: null) (kafka.server.BrokerToControllerRequestThread)
+[2023-07-30 18:25:46,150] INFO [zk-broker-0-to-controller-alter-partition-channel-manager]: Recorded new controller, from now on will use node localhost:9092 (id: 0 rack: null) (kafka.server.BrokerToControllerRequestThread)
+
+
+[ec2-user@ip-172-31-12-201 logs]$ echo dump | nc localhost 2181 | grep brokers
+/brokers/ids/0
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-server-stop.sh /home/ec2-user/kafka/kafka_2.13-3.5.1/config/server.properties
+
+
+
+PRODUCER,CONSUMER,CONSUMER GROUPS:-
+====================================
+topic creation:-
+----------------
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic myTopic --create --partitions 1 --replication-factor 1
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic myTopic
+
+
+producer:-
+----------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic myTopic
+
+consumer:-
+----------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic myTopic --from-beginning
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic myTopic
+
+
+consumer groups:-
+-----------------
+- every consumer is associated with some consumer group by default, if no group name is provided
+- while we create a consumer without mentioning any consumer group name, then kafka will create a default consumer group
+
+list consumer groups:-
+----------------------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+
+- kafka will create consumer group by default with some numberID like:- console-consumer-83897
+
+```
+[ec2-user@ip-172-31-12-201 bin]$ /home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+console-consumer-83897
+```
+
+describe consumer group:-
+-------------------------
+
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group console-consumer-83897
+
+```
+[ec2-user@ip-172-31-12-201 bin]$ /home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group console-consumer-83897
+
+GROUP                  TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                           HOST            CLIENT-ID
+console-consumer-83897 myTopic         0          -               2               -               console-consumer-81c68b44-bdb4-4264-be7a-50e97ad4916a /127.0.0.1      console-consumer
+```
+
+- here LOG-END-OFFSET=2, because till now we have 2 messages in that topic
+- The entire consumer groups information will be stored by kafka cluster in the form of seperate offsets topic
+- inside the __consumer_offsets topic, we will have information about all consumers, like each consumer from where messages are consumed from which topic etc...
+
+```
+[ec2-user@ip-172-31-12-201 bin]$ /home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+__consumer_offsets
+myTopic
+```
+
+multiple producers and consumers on same topic:-
+------------------------------------------------
+producer1:
+----------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic myTopic
+>producer1
+
+producer2:
+----------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic myTopic
+>producer2
+
+consumer1:-
+-----------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic myTopic --from-beginning
+producer1
+producer2
+
+consumer2:-
+------------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic myTopic --from-beginning
+producer1
+producer2
+
+- here, we have ran two consumers consumer1,consumer2 without defining consumer groups, so kafka will randomly generate consumer groups and will add those in that groups
+
+```
+[ec2-user@ip-172-31-12-201 ~]$ /home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+console-consumer-6115
+console-consumer-83897
+```
+
+consumer3(creating own consumer group):-
+----------------------------------------
+/home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic myTopic --group myConsumerGroup --from-beginning
+producer1
+producer2
+
+```
+[ec2-user@ip-172-31-12-201 ~]$ /home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+myConsumerGroup
+console-consumer-6115
+console-consumer-83897
+```
+
+```
+[ec2-user@ip-172-31-12-201 ~]$ /home/ec2-user/kafka/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group myConsumerGroup 
+
+GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                           HOST            CLIENT-ID
+myConsumerGroup myTopic         0          5               5               0               console-consumer-bd4c76ae-d1f3-4f01-b3a4-dfc1c009d05f /127.0.0.1      console-consumer
+```
