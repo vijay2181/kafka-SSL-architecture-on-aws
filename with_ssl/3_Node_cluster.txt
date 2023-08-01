@@ -442,31 +442,58 @@ ssl.keystore.password=password
 
 
 
+##################################################################################################################
+
 ## TESTING PRODUCER AND CONSUMER:-
 ===================================
 test using the console-consumer and console-producer 
 
+finding kafka version:
+----------------------
+[ec2-user@kafka1 bin]$ ./kafka-server-start.sh --version
+[2023-08-01 17:27:39,580] INFO Registered kafka:type=kafka.Log4jController MBean (kafka.utils.Log4jControllerRegistration$)
+3.5.1
+
+create topic:
+-------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 \
+--command-config /home/ec2-user/client.properties \
+--create \
+--topic myTopic \
+--replication-factor 3 \
+--partitions 5
+
 list topics:
 ------------
-/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-2543.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-2403.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-1003.us-west-2.compute.amazonaws.com:9093 --list --command-config /home/ec2-user/client.properties
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --list --command-config /home/ec2-user/client.properties
 
-
-[ec2-user@kafka1 bin]$ /home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-2543.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-2403.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-1003.us-west-2.compute.amazonaws.com:9093 --list --command-config /home/ec2-user/client.properties
+[ec2-user@kafka1 bin]$ /home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --list --command-config /home/ec2-user/client.properties
 
 myTopic
+
+describe topic:
+---------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 \
+--command-config /home/ec2-user/client.properties \
+--describe \
+--topic myTopic
+
+Topic: myTopic  TopicId: 998AOHpgRrGoj0g6iBRjcg PartitionCount: 3       ReplicationFactor: 3    Configs: 
+        Topic: myTopic  Partition: 0    Leader: 3       Replicas: 3,1,2 Isr: 3,1,2
+        Topic: myTopic  Partition: 1    Leader: 1       Replicas: 1,2,3 Isr: 1,2,3
+        Topic: myTopic  Partition: 2    Leader: 2       Replicas: 2,3,1 Isr: 2,3,1
 
 
 ### Producer
 ON SERVER1/CLIENT1:
 -------------------
-/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server ec2-35-90-113-2543.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-2403.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-1003.us-west-2.compute.amazonaws.com:9093 --topic myTopic --producer.config /home/ec2-user/client.properties
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --producer.config /home/ec2-user/client.properties
 
-[ec2-user@kafka1 bin]$ /home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server ec2-35-90-113-2543.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-2403.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-1003.us-west-2.compute.amazonaws.com:9093 --topic myTopic --producer.config /home/ec2-user/client.properties
+[ec2-user@kafka1 bin]$ /home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --producer.config /home/ec2-user/client.properties
 >Hi, Vijay producer is here, are you ready to consume ??
 >
 
 And you can see that we were able to successfully produce a message to our SSL enabled endpoint. on port 9093
-
 
 But now let's also test what happens if we don't provide the required cell properties and we are trying to connect to the SSL endpoint of our Kafka broker. So as you can see that the producer still starts up and it tries to add a message, but it doesn't come back to us.
 
@@ -476,10 +503,173 @@ But now let's also test what happens if we don't provide the required cell prope
 ### Consumer
 ON SERVER2/CLIENT2:
 -------------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --consumer.config /home/ec2-user/client.properties --from-beginning
 
-/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-2543.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-2403.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-1003.us-west-2.compute.amazonaws.com:9093 --topic myTopic --consumer.config /home/ec2-user/client.properties --from-beginning
-
-[ec2-user@kafka2 ~]$ /home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-2543.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-2403.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-1003.us-west-2.compute.amazonaws.com:9093 --topic myTopic --consumer.config /home/ec2-user/client.properties --from-beginning
+[ec2-user@kafka2 ~]$ /home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --consumer.config /home/ec2-user/client.properties --from-beginning
 Hi Vijay producer is here, are you ready to consume ??
 
 
+### Describe topic
+ON SERVER3/CLIENT3:
+-------------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --describe --topic myTopic --command-config /home/ec2-user/client.properties
+
+Topic: myTopic  TopicId: F7X8QcVWTn6OMJW1VWS17A PartitionCount: 1       ReplicationFactor: 1    Configs: 
+        Topic: myTopic  Partition: 0    Leader: 1       Replicas: 1     Isr: 1
+
+
+### Consumer groups
+====================
+consumer groups:-
+-----------------
+- every consumer is associated with some consumer group by default, if no group name is provided
+- while we create a consumer without mentioning any consumer group name, then kafka will create a default consumer group
+
+list consumer groups:-
+----------------------
+before executing below command, we need to make sure that there is active consumer running, otherwise, command will show empty, which means there are no active consumers running, run the consumer by below command and after that execute the consumer group list command
+
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --consumer.config /home/ec2-user/client.properties --from-beginning
+
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --list --command-config /home/ec2-user/client.properties
+
+console-consumer-67119
+
+- kafka will create consumer group by default with some numberID like:- console-consumer-68120
+
+
+describe consumer group:-
+-------------------------
+before executing below command, we need to make sure that there is active consumer running, otherwise, command will show empty, which means there are no active consumers running
+
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-consumer-groups.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --describe --group console-consumer-67119 --command-config /home/ec2-user/client.properties
+
+GROUP                  TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                           HOST            CLIENT-ID
+console-consumer-67119 myTopic         0          -               2               -               console-consumer-ca39d906-f656-4241-80dd-2836f43b2ddf /172.31.6.221   console-consumer
+
+- here LOG-END-OFFSET=2, because till now we have 2 messages in that topic
+- The entire consumer groups information will be stored by kafka cluster in the form of seperate offsets topic
+- inside the __consumer_offsets topic, we will have information about all consumers, like each consumer from where messages are consumed from which topic etc...
+
+while executing above commad, you may get errors related to java heap space OOM
+
+The java.lang.OutOfMemoryError: Java heap space error occurs when the Java Virtual Machine (JVM) does not have enough heap space to perform its operations. The heap space is where the JVM stores objects during program execution. When it runs out of memory in this space, it throws an OutOfMemoryError.
+
+export KAFKA_HEAP_OPTS="-Xmx2g -Xms1g"
+
+The above command sets the maximum heap size (-Xmx) to 2 GB and the initial heap size (-Xms) to 1 GB. You can adjust these values according to the available memory on your system.
+Additionally, if you continue to encounter the TimeoutException, make sure that the Kafka brokers are running and accessible at the specified bootstrap server addresses and ports. 
+
+
+multiple producers and consumers on same topic:-
+================================================
+producer1/client1/SERVER1:
+--------------------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --producer.config /home/ec2-user/client.properties
+>producer1
+
+producer2/client2/SERVER2:
+--------------------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-producer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --producer.config /home/ec2-user/client.properties
+>producer2
+
+consumer3/client3/SERVER3:
+--------------------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --consumer.config /home/ec2-user/client.properties --from-beginning
+
+producer1
+producer2
+- here, we have ran two consumer without defining consumer groups, so kafka will randomly generate consumer groups and will add those in that groups
+
+
+consumer3/client3/SERVER3(creating own consumer group and SUBSCRIBING TO TOPIC):-
+---------------------------------------------------------------------------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 --topic myTopic --group myConsumerGroup --from-beginning --consumer.config /home/ec2-user/client.properties
+ 
+producer1
+producer2
+
+
+remove a topic:
+---------------
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 \
+--command-config /home/ec2-user/client.properties \
+--delete \
+--topic myTopic
+
+- YOU CANNOT DELETE A TOPIC WHICH IS ALREADY CONSUMING OR PRODUCING BY OTHERS
+
+
+
+CONTROLLER:-
+============
+KAFKA CONTROLLER NODE:
+----------------------
+In kafka cluster, one of the broker server will servers as controller, which is responsible for managing the states of partitions and replicas and for performing administrative tasks like reassigning partitions
+
+[ec2-user@kafka1 bin]$ echo dump | nc localhost 2181
+SessionTracker dump:
+Global Sessions(3):
+0x10002d7158b0003       18000ms
+0x20002d711b50004       18000ms
+0x30002d71fc60005       18000ms
+ephemeral nodes dump:
+Sessions with Ephemerals (3):
+0x30002d71fc60005:
+        /brokers/ids/2
+0x20002d711b50004:
+        /brokers/ids/3
+0x10002d7158b0003:
+        /controller
+        /brokers/ids/1
+
+- In every kafka cluster, there will be one contoller Node, here it is  /controller/brokers/ids/1 broker1
+
+- LETS CREATE A TOPIC WITH 3 PARTITION AND 2 REPLICATION:
+
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 \
+--command-config /home/ec2-user/client.properties \
+--create \
+--topic myTopic \
+--replication-factor 2 \
+--partitions 3
+
+/home/ec2-user/kafka_2.13-3.5.1/bin/kafka-topics.sh --bootstrap-server ec2-35-90-113-254.us-west-2.compute.amazonaws.com:9093,ec2-52-43-209-240.us-west-2.compute.amazonaws.com:9093,ec2-54-187-78-100.us-west-2.compute.amazonaws.com:9093 \
+--command-config /home/ec2-user/client.properties \
+--describe \
+--topic myTopic
+
+Topic: myTopic  TopicId: G3jKfSyuRUiIHF1MDQH1QA PartitionCount: 3       ReplicationFactor: 2    Configs: 
+        Topic: myTopic  Partition: 0    Leader: 3       Replicas: 3,1   Isr: 3,1
+        Topic: myTopic  Partition: 1    Leader: 1       Replicas: 1,2   Isr: 1,2
+        Topic: myTopic  Partition: 2    Leader: 2       Replicas: 2,3   Isr: 2,3
+
+Topic: myTopic  Partition: 0    Leader: 3       Replicas: 3,1   Isr: 3,1
+The above line states that, for Partition0, broker3 is the leader. And Replicas means, the Partition0 is present in both broker3 and broker1.
+all the read and write operations will be done from broker3 for Partition0 because for Partition0, broker3 is the leader. The main Partition0 replica which is broker3 is the leader replica and Partition0 in broker1 is the follower replica....so if broker3 is down, then the Partition0 replica in broker1 will become main Partition for reading and writing data.
+so if any producer and consumer wants to write and read data to Partition0 of myTopic topic, then it should contact broker3.
+Isr(in-sync-replicas) means, Isr is the subset of Replicas, so here    Replicas: 3,1   Isr: 3,1
+means, broker3 and broker1 are in-sync in data transmission i.e same Partition0 data is present in broker3 and broker1
+For example producer is producing data to Partition0 of broker3 which is the leader, so the Partition0 of broker1 will send fetch request to Partition0 of broker3 to copy the data from Partition0 of broker3 to Partition0 of broker1
+
+
+what happens internally when we create a topic:-
+------------------------------------------------
+Partition state:
+----------------
+1.NonExistentPartition: this state indicates that the partition was either never created or was created and then deleted
+2.NewPartition: After creation, the partition is in the NewPartition state, in this state the partition should have replicas assigned to it, but no leader/isr yet assigned
+3.OnlinePartition: once a leader is elected for a partition, it is in the OnlinePartition state. we can read/write in this state only
+4.OfflinePartition: if, after successfull leader election, the leader for partition dies, then the Partition moves to the OfflinePartition state
+
+Replica state:
+--------------
+1.NewReplica: when replicas are created during topic creation or partition reassignment, in this state, a replica can only get become follower state change request
+2.OnlineReplica: once a replica is started and part of the assigned replicas for its partition, it is in this state. in this state , it can get either become leader become follower state change request
+3.OfflineReplica: if a replica dies, it moves to this state, This happens when the broker hosting the replica is down
+4.NonExistentReplica: if a replica is deleted, it is moved to this state
+
+- these all states will be managed by the CONTROLLER NODE, here it is broker1, 
+- there will be only one controller node in entire kafka cluster
+- so all partitions states in the cluster will be mananged by the controller
+- controller will also manage state transition i.e transferring from one state to other 
