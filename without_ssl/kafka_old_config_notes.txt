@@ -1,0 +1,501 @@
+KAFKA-SETUP:-
+=============
+
+KAFKA SERVER IS CALLED BROKER 
+CLIENTS WILL PRODUCE/CONSUME DATA TO KAFKA TOPIC
+
+##############################################################################################################################
+###############################################################################################################################
+
+Need for encryption, authentication and authoriztaion in kafka:-
+
+-  currently any client can access your kafka cluster(Authentication)
+-  the clients can publish / consume the topic data(Authorization)
+- GOTO amazon and take t2.large ubuntu instance(2 cores 8gb ram)
+
+# Installation of Apache Kafka
+## install Kafka package
+ssh into your EC2 instance
+```
+sudo apt-get update
+sudo apt-get install -y wget net-tools netcat tar openjdk-8-jdk
+pwd
+/home/ubuntu/
+sudo wget https://downloads.apache.org/kafka/3.3.1/kafka_2.13-3.3.1.tgz
+sudo tar -xzf kafka_2.13-3.3.1.tgz
+ln -s kafka_2.13-3.3.1 kafka                  -- (shortcut name of kafka_2.13-3.3.1 to kafka)
+java -version
+```
+## start Zookeeper
+ssh into your EC2 instance  
+start zookeeper
+```
+sudo ~/kafka/bin/zookeeper-server-start.sh -daemon ~/kafka/config/zookeeper.properties
+```
+check if zookeeper is running
+```
+tail -n 5 ~/kafka/logs/zookeeper.out
+
+echo "ruok" | nc localhost 2181 ; echo
+echo "ruok" | nc <public-dns> 2181 ; echo
+echo "ruok" | nc ec2-18-196-169-2.eu-central-1.compute.amazonaws.com 2181
+
+telnet localhost 2181
+
+
+ubuntu@ip-172-31-0-77:~/kafka$ echo "ruok" | nc localhost 2181 ; echo
+ruok is not executed because it is not in the whitelist.
+
+- if you get this error then, add below two lines at end in 
+sudo vi /home/ubuntu/kafka/config/zookeeper.properties
+
+4lw.commands.whitelist=stat, ruok, conf, isro
+4lw.commands.whitelist=*
+
+
+sudo ~/kafka/bin/zookeeper-server-stop.sh 
+sudo ~/kafka/bin/zookeeper-server-start.sh -daemon ~/kafka/config/zookeeper.properties
+
+ubuntu@ip-172-31-0-77:~/kafka/bin$ echo "ruok" | nc localhost 2181 ; echo
+imok
+
+```
+
+## start Kafka
+ssh into your EC2 instance
+Start Kafka Broker
+```
+~/kafka/bin/kafka-server-start.sh -daemon ~/kafka/config/server.properties
+```
+Check Broker status
+```
+tail -n 10 ~/kafka/logs/kafkaServer.out
+netstat -pant | grep ":9092"
+```
+
+ubuntu@ip-172-31-13-221:~$ netstat -pant | grep ":9092"
+(Not all processes could be identified, non-owned process info
+ will not be shown, you would have to be root to see it all.)
+tcp6       0      0 :::9092                 :::*                    LISTEN      -
+tcp6       0      0 172.31.13.221:9092      172.31.13.221:51714     ESTABLISHED -
+tcp6       0      0 172.31.13.221:51714     172.31.13.221:9092      ESTABLISHED -
+
+
+################################################################################################################################
+###############################################################################################################################
+
+since we will restart kafka and zookeeper several times, it is proper to have service commands available, so that we can restart, start, stop services easily...for ths, we will use systemd utility
+we will setup service scripts for kafka and zookeeper as service
+
+
+sudo ~/kafka/bin/kafka-server-stop.sh
+sudo ~/kafka/bin/zookeeper-server-stop.sh
+
+for systemd any manual service creation will be placed in /etc/systemd/system/   here we can name your servcie file with .servcie
+----------------------------------------------
+sudo vi /etc/systemd/system/zookeeper.service
+
+[Unit]
+Description=Apache Zookeeper server
+Documentation=http://zookeeper.apache.org
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/kafka/bin/zookeeper-server-start.sh /home/ubuntu/kafka/config/zookeeper.properties
+ExecStop=/home/ubuntu/kafka/bin/zookeeper-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
+---------------------------------------------------
+sudo vi /etc/systemd/system/kafka.service
+
+[Unit]
+Description=Apache Kafka server (broker)
+Documentation=http://kafka.apache.org/documentation.html
+Requires=zookeeper.service
+
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/kafka/bin/kafka-server-start.sh /home/ubuntu/kafka/config/server.properties
+ExecStop=/home/ubuntu/kafka/bin/kafka-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
+-----------------------------------------------------
+- normally we will start zk and kafka seperately right
+- HERE in systemd file it metioned Requires zookeeper.service file, means kafka service depends on running zookeeper...so if we start kafka we will implicity start zookeeper as well
+
+- to create service scripts we need to enable systemctl
+sudo systemctl enable zookeeper
+sudo systemctl enable kafka
+
+ubuntu@ip-172-31-0-77:~/kafka/config$ sudo systemctl enable zookeeper
+Created symlink /etc/systemd/system/multi-user.target.wants/zookeeper.service → /etc/systemd/system/zookeeper.service.
+ubuntu@ip-172-31-0-77:~$ sudo systemctl enable kafka
+Created symlink /etc/systemd/system/multi-user.target.wants/kafka.service → /etc/systemd/system/kafka.service.
+
+ubuntu@ip-172-31-0-77:~$ sudo systemctl status zookeeper
+● zookeeper.service - Apache Zookeeper server
+     Loaded: loaded (/etc/systemd/system/zookeeper.service; enabled; vendor preset: enabled)
+     Active: inactive (dead)
+       Docs: http://zookeeper.apache.org
+
+
+sudo systemctl start zookeeper
+sudo systemctl status zookeeper
+sudo systemctl start kafka
+sudo systemctl status kafka
+
+
+################################################################################################################################
+###############################################################################################################################
+
+# Testing Producer and Consumer from outside AWS
+=================================================
+## SERVER side
+===============
+
+## adjusting Security Group
+login to AWS management console
+goto your EC2 instance
+click on the security group and add 2 rules, for ports   
+  * 2181
+  * 9092
+
+## copy your public DNS of your instance
+ec2-18-196-169-2.eu-central-1.compute.amazonaws.com
+
+## adjust listener settings for Kafka
+replace server.properties in your EC2 instance (under /home/ubuntu/kafka/config/) by below server.properties file, *and* add your instance's public DNS in  
+
+  * advertised.listeners         -- we need to propagate kafka public dns name to clients, so that they can connect outside aws
+  * zookeeper.connect
+  
+  advertised.listeners=PLAINTEXT://ec2-52-12-226-247.us-west-2.compute.amazonaws.com:9092
+  zookeeper.connect=ec2-52-12-226-247.us-west-2.compute.amazonaws.com:2181
+
+sudo vi /home/ubuntu/kafka/config/server.properties
+-------------------------------------------------------------------------------------------------------------------------------
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# see kafka.server.KafkaConfig for additional details and defaults
+
+############################# Server Basics #############################
+
+# The id of the broker. This must be set to a unique integer for each broker.
+broker.id=0
+
+############################# Socket Server Settings #############################
+
+# The address the socket server listens on. It will get the value returned from
+# java.net.InetAddress.getCanonicalHostName() if not configured.
+#   FORMAT:
+#     listeners = listener_name://host_name:port
+#   EXAMPLE:
+#     listeners = PLAINTEXT://your.host.name:9092
+advertised.listeners=PLAINTEXT://ec2-52-12-226-247.us-west-2.compute.amazonaws.com:9092
+zookeeper.connect=ec2-52-12-226-247.us-west-2.compute.amazonaws.com:2181
+
+
+# Maps listener names to security protocols, the default is for them to be the same. See the config documentation for more details
+#listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
+
+# The number of threads that the server uses for receiving requests from the network and sending responses to the network
+num.network.threads=3
+
+# The number of threads that the server uses for processing requests, which may include disk I/O
+num.io.threads=8
+
+# The send buffer (SO_SNDBUF) used by the socket server
+socket.send.buffer.bytes=102400
+
+# The receive buffer (SO_RCVBUF) used by the socket server
+socket.receive.buffer.bytes=102400
+
+# The maximum size of a request that the socket server will accept (protection against OOM)
+socket.request.max.bytes=104857600
+
+auto.create.topics.enable=false
+
+############################# Log Basics #############################
+
+log.dirs=/home/ubuntu/kafka-logs
+
+# The default number of log partitions per topic. More partitions allow greater
+# parallelism for consumption, but this will also result in more files across
+# the brokers.
+num.partitions=1
+
+# The number of threads per data directory to be used for log recovery at startup and flushing at shutdown.
+# This value is recommended to be increased for installations with data dirs located in RAID array.
+num.recovery.threads.per.data.dir=1
+
+############################# Internal Topic Settings  #############################
+# The replication factor for the group metadata internal topics "__consumer_offsets" and "__transaction_state"
+# For anything other than development testing, a value greater than 1 is recommended for to ensure availability such as 3.
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+
+############################# Log Flush Policy #############################
+
+# Messages are immediately written to the filesystem but by default we only fsync() to sync
+# the OS cache lazily. The following configurations control the flush of data to disk.
+# There are a few important trade-offs here:
+#    1. Durability: Unflushed data may be lost if you are not using replication.
+#    2. Latency: Very large flush intervals may lead to latency spikes when the flush does occur as there will be a lot of data to flush.
+#    3. Throughput: The flush is generally the most expensive operation, and a small flush interval may lead to exceessive seeks.
+# The settings below allow one to configure the flush policy to flush data after a period of time or
+# every N messages (or both). This can be done globally and overridden on a per-topic basis.
+
+# The number of messages to accept before forcing a flush of data to disk
+#log.flush.interval.messages=10000
+
+# The maximum amount of time a message can sit in a log before we force a flush
+#log.flush.interval.ms=1000
+
+############################# Log Retention Policy #############################
+
+# The following configurations control the disposal of log segments. The policy can
+# be set to delete segments after a period of time, or after a given size has accumulated.
+# A segment will be deleted whenever *either* of these criteria are met. Deletion always happens
+# from the end of the log.
+
+# The minimum age of a log file to be eligible for deletion due to age
+log.retention.hours=168
+
+# A size-based retention policy for logs. Segments are pruned from the log unless the remaining
+# segments drop below log.retention.bytes. Functions independently of log.retention.hours.
+#log.retention.bytes=1073741824
+
+# The maximum size of a log segment file. When this size is reached a new log segment will be created.
+log.segment.bytes=1073741824
+
+# The interval at which log segments are checked to see if they can be deleted according
+# to the retention policies
+log.retention.check.interval.ms=300000
+
+############################# Zookeeper #############################
+
+# Zookeeper connection string (see zookeeper docs for details).
+# This is a comma separated host:port pairs, each corresponding to a zk
+# server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002".
+# You can also append an optional chroot string to the urls to specify the
+# root directory for all kafka znodes.
+
+# Timeout in ms for connecting to zookeeper
+zookeeper.connection.timeout.ms=6000
+
+
+############################# Group Coordinator Settings #############################
+
+# The following configuration specifies the time, in milliseconds, that the GroupCoordinator will delay the initial consumer rebalance.
+# The rebalance will be further delayed by the value of group.initial.rebalance.delay.ms as new members join the group, up to a maximum of max.poll.interval.ms.
+# The default value for this is 3 seconds.
+# We override this to 0 here as it makes for a better out-of-the-box experience for development and testing.
+# However, in production environments the default value of 3 seconds is more suitable as this will help to avoid unnecessary, and potentially expensive, rebalances during application startup.
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+## restart Kafka
+```
+sudo systemctl restart kafka
+
+sudo systemctl status kafka
+```
+
+## CLIENT side
+==============
+## setup Kafka on your computer
+download Kafka binaries to your computer and perform the same steps as on your EC2 instance
+
+```
+sudo apt-get update -y
+sudo apt-get install -y wget net-tools netcat tar openjdk-8-jdk
+pwd
+/home/ubuntu/
+sudo wget https://downloads.apache.org/kafka/3.3.1/kafka_2.13-3.3.1.tgz
+sudo tar -xzf kafka_2.13-3.3.1.tgz
+ln -s kafka_2.13-3.3.1 kafka                  -- (shortcut name of kafka_2.13-3.3.1 to kafka)
+java -version
+```
+
+## start zookeeper
+```
+sudo ~/kafka/bin/zookeeper-server-start.sh -daemon ~/kafka/config/zookeeper.properties
+```
+
+## test Zookeeper availability
+```
+echo "ruok" | nc localhost 2181 ; echo
+echo "ruok" | nc <public-dns> 2181 ; echo
+echo "ruok" | nc ec2-18-196-169-2.eu-central-1.compute.amazonaws.com 2181
+
+telnet localhost 2181
+
+
+ubuntu@ip-172-31-0-77:~/kafka$ echo "ruok" | nc localhost 2181 ; echo
+ruok is not executed because it is not in the whitelist.
+
+- if you get this error then, add below two lines at end in 
+sudo vi /home/ubuntu/kafka/config/zookeeper.properties
+
+4lw.commands.whitelist=stat, ruok, conf, isro
+4lw.commands.whitelist=*
+
+
+sudo ~/kafka/bin/zookeeper-server-stop.sh 
+sudo ~/kafka/bin/zookeeper-server-start.sh -daemon ~/kafka/config/zookeeper.properties 
+
+ubuntu@ip-172-31-0-77:~/kafka/bin$ echo "ruok" | nc localhost 2181 ; echo
+imok
+
+```
+
+## start Kafka
+ssh into your EC2 instance
+Start Kafka Broker
+```
+~/kafka/bin/kafka-server-start.sh -daemon ~/kafka/config/server.properties
+```
+Check Broker status
+```
+tail -n 10 ~/kafka/logs/kafkaServer.out
+netstat -pant | grep ":9092"
+```
+
+
+## create a test topic:-
+========================
+```
+~/kafka/bin/kafka-topics.sh --zookeeper <public-dns>:2181 --create --topic kafka-security-topic --replication-factor 1 --partitions 2
+
+~/kafka/bin/kafka-topics.sh --zookeeper ec2-34-221-89-105.us-west-2.compute.amazonaws.com:2181 --create --topic kafka-security-topic --replication-factor 1 --partitions 2
+
+If you got ERROR:-
+------------------
+Exception in thread "main" joptsimple.UnrecognizedOptionException: zookeeper is not a recognized option
+
+Newer versions(2.2+) of Kafka no longer requires ZooKeeper connection string
+
+--zookeeper localhost:2181
+
+It throws the following exception while creating a topic:-
+Exception in thread "main" joptsimple.UnrecognizedOptionException: zookeeper is not a recognized option
+
+./kafka-topics.sh --create --topic test-topic --bootstrap-server localhost:9092 --replication-factor 1 --partitions 4
+
+
+Finding Kafka version:-
+=======================
+ps -ef|grep kafka
+Look for kafka-clients- 
+it will contain the version number
+
+ps -ef|grep kafka | grep kafka-clients
+/home/ubuntu/kafka/bin/../libs/kafka-clients-3.3.1.jar
+- kafka version = 3.3.1
+
+or 
+
+in kafka binary kafka_2.13-3.3.1/    -3.3.1 is version
+
+
+
+```
+
+sudo ~/kafka/bin/kafka-topics.sh --bootstrap-server ec2-34-221-89-105.us-west-2.compute.amazonaws.com:9092 --create --replication-factor 1 --partitions 10 --topic kafka-security-topic
+
+Created topic kafka-security-topic.
+
+sudo ~/kafka/bin/kafka-topics.sh --create --bootstrap-server localhost:9092 \
+--replication-factor 1 --partitions 4 \
+--topic kafka-security-topic
+
+./kafka-broker-api-versions.sh --bootstrap-server localhost:9093 --version
+--zookeeper kafka1.rcx-sei.lmvi.net:2181 --version
+
+## describe topic
+```
+
+~/kafka/bin/kafka-topics.sh --zookeeper ec2-18-196-169-2.eu-central-1.compute.amazonaws.com:2181 --describe --topic kafka-security-topic
+
+or
+
+sudo ~/kafka/bin/kafka-topics.sh --bootstrap-server ec2-34-221-89-105.us-west-2.compute.amazonaws.com:9092 --describe --topic kafka-security-topic
+```
+
+## start Producer
+```
+
+~/kafka/bin/kafka-console-producer.sh --bootstrap-server ec2-34-221-89-105.us-west-2.compute.amazonaws.com:9092 --topic kafka-security-topic
+
+```
+
+## start Consumer
+```
+
+~/kafka/bin/kafka-console-consumer.sh --bootstrap-server ec2-34-221-89-105.us-west-2.compute.amazonaws.com:9092 --topic kafka-security-topic
+
+```
+
+###############################################################################################################################
+###############################################################################################################################
+
+producer and consumer side by side:-
+====================================
+
+TERMINAL 1 (SAME SERVER)
+ubuntu@ip-172-31-13-221:~$ ~/kafka/bin/kafka-console-producer.sh --bootstrap-server ec2-34-221-89-105.us-west-2.compute.amazonaws.com:9092 --topic vijay-topic
+>hi
+>Hi iam vijay
+
+TERMINAL 2 (SAME SERVER)
+ubuntu@ip-172-31-13-221:~/kafka/bin$ ~/kafka/bin/kafka-console-consumer.sh --bootstrap-server ec2-34-221-89-105.us-west-2.compute.amazonaws.com:9092 --topic vijay
+hi
+Hi iam vijay
+
+- CLIENTS TALKING TO KAFKA AND ZOOKEEPER ON EC2-MACHINE
+
+
+###############################################################################################################################
+###############################################################################################################################
+
+STOPPING EC2 MACHINE AND RESTARTING KAFKA ISSUES:-
+====================================================
+
+when we stop the kafka server, we need to change server.properties file public-dns 
+
+sudo vi /home/ubuntu/kafka/config/server.properties
+
+advertised.listeners=PLAINTEXT://ec2-18-236-232-157.us-west-2.compute.amazonaws.com:9092
+zookeeper.connect=ec2-18-236-232-157.us-west-2.compute.amazonaws.com:2181
+
+when we do "sudo systemctl restart kafka" if we get errors 
+
+kafka.common.InconsistentClusterIdException: The Cluster ID 77K9yWApSliUWZnZPVK7Aw doesn't match stored clusterId Some(VmuumtknQVa7Bl2y6uhgEw) in meta.properties. The broker is trying to join the wrong cluster. Configured zookeeper.connect may be wrong.
+
+- so we need to delete all kafka,zookeeper log files
+- cd /home/ubuntu/kafka/logs
+- sudo rm *
+- sudo systemctl restart kafka
+
+
+###############################################################################################################################
+###############################################################################################################################
