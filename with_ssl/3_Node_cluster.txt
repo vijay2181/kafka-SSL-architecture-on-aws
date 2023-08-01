@@ -379,6 +379,28 @@ sudo systemctl status kafka
 sudo systemctl stop kafka
 
 
+
+[ec2-user@kafka1 ~]$ echo dump | nc localhost 2181
+SessionTracker dump:
+Global Sessions(3):
+0x10002d7158b0003       18000ms
+0x20002d711b50004       18000ms
+0x30002d71fc60005       18000ms
+ephemeral nodes dump:
+Sessions with Ephemerals (3):
+0x30002d71fc60005:
+        /brokers/ids/2
+0x20002d711b50004:
+        /brokers/ids/3
+0x10002d7158b0003:
+        /controller
+        /brokers/ids/1
+Connections dump:
+Connections Sets (2)/(2):
+0 expire at Tue Aug 01 16:32:27 UTC 2023:
+2 expire at Tue Aug 01 16:32:37 UTC 2023:
+        ip: /127.0.0.1:33308 sessionId: 0x0
+        ip: /35.90.113.254:52988 sessionId: 0x10002d7158b0003
 #############################################################################################################################################################
 #############################################################################################################################################################
 
