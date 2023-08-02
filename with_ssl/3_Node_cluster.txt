@@ -39,6 +39,26 @@ cd ssl
 
 run the certs.sh scripts by mentioning 3 servers public dns names in it, this script will create certs for SERVER1,SERVER2,SERVER3,client CERTS
 
+SERVER1=ec2-35-90-113-2543.us-west-2.compute.amazonaws.com
+SERVER2=ec2-52-43-209-2403.us-west-2.compute.amazonaws.com
+SERVER3=ec2-54-187-78-1003.us-west-2.compute.amazonaws.com
+
+SSL certificates are tied to specific domain names, and if the domain names changes, the previously issued certificates will no longer be valid for the new domain names. Therefore, you will have to generate new SSL certificates for the updated domain names and use them to secure your Kafka brokers.
+
+- For example if you created certs for public aws domain names of servers and if you stop server and start again, then the domain name changes, so you need to create certs again.always use the correct SSL certificates corresponding to the current domain names of your AWS instances.
+
+- The SSL certificates themselves do not have built-in awareness of domain name changes. SSL certificates are issued for specific domain names (or IP addresses), and they contain information about the domain they are intended to secure. When a client (e.g., another server, a web browser, or a Kafka client) attempts to connect to your Kafka brokers, it checks the SSL certificate presented by the broker to ensure it matches the domain name the client is trying to reach.
+
+- SSL certificates are issued based on the domain name or IP address for which they are intended to secure communication. The certificate includes the domain name or IP address in its subject field, which is verified by the client (e.g., a web browser, server, or Kafka client) during the SSL handshake process.
+
+- When you create an SSL certificate, you specify the domain name(s) or IP address(es) that the certificate should be valid for. The certificate authority (CA) then verifies the ownership of the domain name(s) before issuing the certificate.
+
+- So, when I mentioned that the SSL certificate contains information about the domain name, it's essentially the name that the certificate is issued for, and the client verifies if the domain name it's trying to connect to matches the domain name in the certificate.
+
+- If the domain name changes (due to instance restart, for example), the previously issued certificate will no longer match the new domain name, and you will need to obtain a new certificate for the updated domain name to ensure secure communication.
+
+- Local Development: If you only need a domain for local development and testing on your computer, you can use the hosts file on your machine to create a temporary domain that points to your local IP address.
+
 vi certs.sh
 SERVER1=ec2-35-90-113-2543.us-west-2.compute.amazonaws.com
 SERVER2=ec2-52-43-209-2403.us-west-2.compute.amazonaws.com
