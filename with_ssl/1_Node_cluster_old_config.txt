@@ -1,3 +1,15 @@
+DOWNLOAD KAFKA, in new versions, zookeeper is coming as bundle inside kafka only, no need to download seperately:
+=====================================================================================================================
+# Install required packages
+sudo apt-get update
+sudo apt-get install -y wget net-tools netcat tar openjdk-8-jdk
+
+# Download and extract Kafka
+wget https://downloads.apache.org/kafka/$KAFKA_VERSION/kafka_2.12-$KAFKA_VERSION.tgz
+tar -xzf kafka_2.12-$KAFKA_VERSION.tgz
+ln -s kafka_2.12-$KAFKA_VERSION kafka
+
+
 SSL ENCRYPTION IN KAFKA:-
 =========================
 
