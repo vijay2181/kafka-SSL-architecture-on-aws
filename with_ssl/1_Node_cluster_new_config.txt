@@ -1,0 +1,300 @@
+#!/bin/bash
+
+#TAKE t2.medium ubuntu server on aws
+#PORTS TO OPEN:22,9092,9093,2888-3888,2181
+
+
+sudo -i
+cd ~
+
+###################################################################################
+ENV VARIABLES:
+===============
+DOMAIN_NAME=ec2-3-91-161-220.compute-1.amazonaws.com
+export SRVPASS=serversecret
+KAFKA_VERSION=3.6.0
+
+
+
+###################################################################################
+SSL CERTS :
+===========
+
+mkdir ssl
+cd ssl 
+
+# Setup CA
+openssl req -new -newkey rsa:4096 -days 365 -x509 -subj "/CN=Kafka-Security-CA" -keyout ca-key -out ca-cert -nodes
+
+## create a server(kafka broker) certificate !! put your public EC2-DNS here, after "CN="
+
+keytool -genkey -keystore kafka.server.keystore.jks -validity 365 -storepass $SRVPASS -keypass $SRVPASS  -dname "CN=$DOMAIN_NAME" -storetype pkcs12
+
+# create a certification request file, to be signed by the CA
+keytool -keystore kafka.server.keystore.jks -certreq -file cert-file -storepass $SRVPASS -keypass $SRVPASS
+
+# sign the server certificate
+openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days 365 -CAcreateserial -passin pass:$SRVPASS
+
+# Trust the CA by creating a truststore for our kafa broker and importing the ca-cert
+keytool -keystore kafka.server.truststore.jks -alias CARoot -import -file ca-cert -storepass $SRVPASS -keypass $SRVPASS -noprompt
+
+# Import CA and the signed server certificate into the keystore
+keytool -keystore kafka.server.keystore.jks -alias CARoot -import -file ca-cert -storepass $SRVPASS -keypass $SRVPASS -noprompt
+keytool -keystore kafka.server.keystore.jks -import -file cert-signed -storepass $SRVPASS -keypass $SRVPASS -noprompt
+
+cd ~
+
+###########################################################################################
+DOWNLOAD KAFKA, in new versions, zookeeper is coming as bundle inside kafka only, no need to download seperately:
+=====================================================================================================================
+# Install required packages
+sudo apt-get update
+sudo apt-get install -y wget net-tools netcat tar openjdk-8-jdk
+
+# Download and extract Kafka
+wget https://downloads.apache.org/kafka/$KAFKA_VERSION/kafka_2.12-$KAFKA_VERSION.tgz
+tar -xzf kafka_2.12-$KAFKA_VERSION.tgz
+ln -s kafka_2.12-$KAFKA_VERSION kafka
+
+############################################################################################
+
+# add service scripts for managing Kafka/Zookeeper
+=================================================
+cat > /etc/systemd/system/zookeeper.service << EOF
+[Unit]
+Description=Apache Zookeeper server
+Documentation=http://zookeeper.apache.org
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+ExecStart=/root/kafka/bin/zookeeper-server-start.sh /root/kafka/config/zookeeper.properties
+ExecStop=/root/kafka/bin/zookeeper-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+cat > /etc/systemd/system/kafka.service << EOF
+[Unit]
+Description=Apache Kafka server (broker)
+Documentation=http://kafka.apache.org/documentation.html
+Requires=zookeeper.service
+
+[Service]
+Type=simple
+ExecStart=/root/kafka/bin/kafka-server-start.sh /root/kafka/config/server.properties
+ExecStop=/root/kafka/bin/kafka-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+##############################################################################################
+
+#properties files
+==================
+mkdir /root/zookeeper
+mkdir /root/kafka-logs
+
+#ZOOKEPER
+mv /root/kafka/config/zookeeper.properties /root/kafka/config/zookeeper.properties-backup
+cat > /root/kafka/config/zookeeper.properties << EOF
+dataDir=/root/zookeeper
+clientPort=2181
+maxClientCnxns=0
+EOF
+
+#KAFKA
+mv /root/kafka/config/server.properties /root/kafka/config/server.properties-backup
+cat > /root/kafka/config/server.properties << EOF
+broker.id=0
+listeners=PLAINTEXT://0.0.0.0:9092,SSL://0.0.0.0:9093
+advertised.listeners=PLAINTEXT://$DOMAIN_NAME:9092,SSL://$DOMAIN_NAME:9093
+zookeeper.connect=$DOMAIN_NAME:2181
+ssl.keystore.location=/root/ssl/kafka.server.keystore.jks
+ssl.keystore.password=serversecret
+ssl.key.password=serversecret
+ssl.truststore.location=/root/ssl/kafka.server.truststore.jks
+ssl.truststore.password=serversecret
+num.network.threads=3
+num.io.threads=8
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+auto.create.topics.enable=false
+log.dirs=/root/kafka-logs
+num.partitions=1
+num.recovery.threads.per.data.dir=1
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+log.retention.hours=168
+log.segment.bytes=1073741824
+log.retention.check.interval.ms=300000
+zookeeper.connection.timeout.ms=6000
+EOF
+##############################################################################################
+activating the systemd scripts
+===============================
+systemctl daemon-reload
+sudo systemctl enable zookeeper
+sudo systemctl enable kafka
+
+sudo systemctl start zookeeper
+sleep 10
+sudo systemctl start kafka
+
+##############################################################################################
+VERFICATION:
+=============
+#tail -n 5 ~/kafka/logs/zookeeper.out
+#echo "ruok" | nc localhost 2181 ; echo
+#tail -f /root/kafka/logs/server.log
+#netstat -pant | grep ":9092"
+#ps -ef | grep kafka
+#ps -ef | grep zookeeper
+#openssl s_client -connect $DOMAIN_NAME:9093
+
+#sudo systemctl status zookeeper
+#sudo systemctl status kafka
+#sudo systemctl stop zookeeper
+#sudo systemctl stop kafka
+
+
+#########################################################################################################
+MAIN SERVER AS PRODUCER:
+========================
+
+## grab CA certificate from server and add it to CLIENT truststore
+cd ~
+mkdir /root/client
+export CLIPASS=clientpass
+cd ~
+cd ssl
+
+keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca-cert  -storepass $CLIPASS -keypass $CLIPASS -noprompt
+mv kafka.client.truststore.jks /root/client/
+
+cd /root/client
+
+So next we are going to create our properties file as which we have to provide as additional parameter to our clients.
+So the console consumer and the console producer at the end
+
+## create client.properties and configure SSL parameters
+
+cat > /root/client/client.properties << EOF
+security.protocol=SSL
+ssl.truststore.location=/root/client/kafka.client.truststore.jks
+ssl.truststore.password=clientpass
+EOF
+
+- paste the above content in /root/client/client.properties file
+- now we can start our consumer client on same main server
+
+CREATE A SAMPLE TOPIC:
+======================
+/root/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server ec2-3-91-161-220.compute-1.amazonaws.com:9093 --command-config /root/client/client.properties --replication-factor 1 --partitions 3 --topic vijay-test-topic
+
+/root/kafka/bin/kafka-topics.sh --describe --topic vijay-test-topic --bootstrap-server ec2-3-91-161-220.compute-1.amazonaws.com:9093 --command-config /root/client/client.properties
+
+root@ip-172-31-91-214:~/client# /root/kafka/bin/kafka-topics.sh --describe --topic vijay-test-topic --bootstrap-server ec2-3-91-161-220.compute-1.amazonaws.com:9093 --command-config /root/client/client.properties
+Topic: vijay-test-topic TopicId: qqCAO7IiReigEH42yHuz6w PartitionCount: 3       ReplicationFactor: 1    Configs: segment.bytes=1073741824
+        Topic: vijay-test-topic Partition: 0    Leader: 0       Replicas: 0     Isr: 0
+        Topic: vijay-test-topic Partition: 1    Leader: 0       Replicas: 0     Isr: 0
+        Topic: vijay-test-topic Partition: 2    Leader: 0       Replicas: 0     Isr: 0
+
+
+~/kafka/bin/kafka-console-producer.sh --broker-list <MAIN KAFKA SERVER PUBLIC DNS>:9093 --topic kafka-security-topic --producer.config ~/client/client.properties
+
+/root/kafka/bin/kafka-console-producer.sh --broker-list ec2-3-91-161-220.compute-1.amazonaws.com:9093 --topic vijay-test-topic --producer.config /root/client/client.properties
+
+
+root@ip-172-31-91-214:~/client# /root/kafka/bin/kafka-console-producer.sh --broker-list ec2-3-91-161-220.compute-1.amazonaws.com:9093 --topic vijay-test-topic --producer.config /root/client/client.properties
+>Hi Iam Vijay
+>This is producer producing 1234 Message
+>
+
+
+#################################################################################################
+CLIENT :
+========
+- TAKE ONE UBUNTU SERVER ON AWS AND INSTALL KAFKA IN IT 
+
+sudo -i
+KAFKA_VERSION=3.6.0
+
+# Install required packages
+sudo apt-get update
+sudo apt-get install -y openjdk-11-jre-headless
+
+
+# Download and extract Kafka
+wget https://downloads.apache.org/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz
+tar -xzf kafka_2.13-$KAFKA_VERSION.tgz
+#mv kafka_2.13-$KAFKA_VERSION kafka_dir
+ln -s kafka_2.13-$KAFKA_VERSION kafka
+
+
+## grab CA certificate ca-cert from Remote MAIN server and add it to LOCAL CLIENT truststore
+we can copy the ca-cert from main server and create client.trustore for client
+#scp -i ~/kafka-security.pem ubuntu@<<your-public-DNS>>:/home/ubuntu/ssl/ca-cert .
+#scp -i ~/kafka-security.pem ubuntu@ec2-35-165-171-131.us-west-2.compute.amazonaws.com:/home/ubuntu/ssl/ca-cert .
+#or directly paste content of ca-cert from MAIN server
+
+
+mkdir /root/client
+export CLIPASS=clientpass
+
+cd /root/client
+ls
+ca-cert
+
+
+
+keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca-cert  -storepass $CLIPASS -keypass $CLIPASS -noprompt
+
+So next we are going to create our properties file as which we have to provide as additional parameter to our clients.
+So the console producer at the end
+
+## create client.properties and configure SSL parameters
+
+cat > /root/client/client.properties << EOF
+security.protocol=SSL
+ssl.truststore.location=/root/client/kafka.client.truststore.jks
+ssl.truststore.password=clientpass
+EOF
+
+- paste the above content in /root/client/client.properties file
+- now we can start our producer client
+
+
+## TEST
+test using console-consumer
+
+### CONSUMER
+
+openssl s_client -connect <MAIN KAFKA SERVER PUBLIC DNS>:9093
+#openssl s_client -connect ec2-3-91-161-220.compute-1.amazonaws.com:9093
+
+
+~/kafka/bin/kafka-console-consumer.sh --bootstrap-server ec2-3-91-161-220.compute-1.amazonaws.com:9093 --topic vijay-test-topic --consumer.config ~/client/client.properties
+
+
+root@ip-172-31-26-33:~/client# ~/kafka/bin/kafka-console-consumer.sh --bootstrap-server ec2-3-91-161-220.compute-1.amazonaws.com:9093 --topic vijay-test-topic --consumer.config ~/client/client.properties
+Hi Iam Vijay
+This is producer producing 1234 Message
+
+And you can see that we were able to successfully produce a message to our SSL enabled endpoint. on port 9093
+
+- HERE MAIN SERVER(KAFKA) IS PRODUCER AND OTHER SERVER(CLIENT) IS CONSUMER
+
+
+
+
+
+
