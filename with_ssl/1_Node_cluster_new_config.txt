@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #TAKE t2.medium ubuntu server on aws
 #PORTS TO OPEN:22,9092,9093,2888-3888,2181
 
