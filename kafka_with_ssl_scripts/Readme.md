@@ -11,7 +11,6 @@ cd kafka_with_ssl_scripts/
 
 ```
 chmod +x generate_certs.sh
-cd /home/ubuntu
 ```
 ```
 # Usage: ./generate_certs.sh <PUBLIC_DOMAIN_NAME> <SRVPASS
