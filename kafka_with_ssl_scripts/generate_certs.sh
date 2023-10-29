@@ -15,6 +15,7 @@ SRVPASS=$2
 sudo apt-get update
 sudo apt-get install -y wget net-tools netcat tar openjdk-8-jdk
 
+cd /home/ubuntu/
 mkdir ssl
 cd ssl 
 
