@@ -1,38 +1,45 @@
+# Installing Single Node kafka Cluster with SSL using SHELL script
+
 - Take t2.medium ubuntu 22.04 server
 - open 22,2181,9092-9093,2888-3888 ports in SG
 
+```
 chmod +x generate_certs.sh
 cd /home/ubuntu
-
+```
+```
 # Usage: ./generate_certs.sh <PUBLIC_DOMAIN_NAME> <SRVPASS
 bash -x generate_certs.sh ec2-52-3-192-172.compute-1.amazonaws.com serverpassword
-
+```
 - This will create ca certs and server keystore, trustore in /home/ubuntu/ssl folder
 
-
+```
 chmod +x install_kafka.sh
 # Usage: ./install_kafka.sh <KAFKA_VERSION> <PUBLIC_DOMAIN_NAME> <SRVPASS>
 sudo bash -x install_kafka.sh 3.6.0 ec2-52-3-192-172.compute-1.amazonaws.com serverpassword
-
+```
 - The above command has to be executed with sudo previlages because we are configuring zookeeper and kafka as systemd services
 - This will install kafka, start zookeeper kafka will all configs and ssl as service
-- zookeeper and kafka will be update- you can test with below commands
+- zookeeper and kafka will be STARTED and you can test with below commands
 
-#VERFICATION:
-#tail -n 5 ~/kafka/logs/zookeeper.out
-#echo "ruok" | nc localhost 2181 ; echo
-#tail -f /home/ubuntu/kafka/logs/server.log
-#netstat -pant | grep ":9092"
-#ps -ef | grep kafka
-#ps -ef | grep zookeeper
-#openssl s_client -connect $DOMAIN_NAME:9093
+```
+#VERFICATION OF ZOOKEEPER AND KAFKA:
+tail -n 5 ~/kafka/logs/zookeeper.out
+echo "ruok" | nc localhost 2181 ; echo
+tail -f /home/ubuntu/kafka/logs/server.log
+netstat -pant | grep ":9092"
+ps -ef | grep kafka
+ps -ef | grep zookeeper
+openssl s_client -connect $DOMAIN_NAME:9093
 
-#sudo systemctl status zookeeper
-#sudo systemctl status kafka
-#sudo systemctl stop zookeeper
-#sudo systemctl stop kafka
+sudo systemctl status zookeeper
+sudo systemctl status kafka
+sudo systemctl stop zookeeper
+sudo systemctl stop kafka
+```
 
-
+## PRODUCER TESTING
+```
 #TESTING
 #MAIN SERVER AS PRODUCER:
 
@@ -86,8 +93,11 @@ root@ip-172-31-91-214:~/client# /home/ubuntu/kafka/bin/kafka-console-producer.sh
 >This is producer producing 1234 Message
 >
 
+```
 
-#################################################################################################
+## CONSUMER TESTING
+
+```
 CLIENT :
 ========
 - TAKE ONE UBUNTU SERVER ON AWS AND INSTALL KAFKA IN IT 
@@ -159,3 +169,12 @@ This is producer producing 1234 Message
 And you can see that we were able to successfully produce a message to our SSL enabled endpoint. on port 9093
 
 - HERE MAIN SERVER(KAFKA) IS PRODUCER AND OTHER SERVER(CLIENT) IS CONSUMER
+```
+
+
+
+![image](https://github.com/vijay2181/kafka-SSL-architecture-on-aws/assets/66196388/1a82bdcd-87e7-43e9-a0d2-fa9ac16fde9e)
+
+
+![image](https://github.com/vijay2181/kafka-SSL-architecture-on-aws/assets/66196388/342d73b8-b017-4c81-907f-24f2dbd54ccd)
+
