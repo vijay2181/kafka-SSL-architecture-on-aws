@@ -4,6 +4,12 @@
 - open 22,2181,9092-9093,2888-3888 ports in SG
 
 ```
+git clone https://github.com/vijay2181/kafka-SSL-architecture-on-aws.git
+cd kafka-SSL-architecture-on-aws/
+cd kafka_with_ssl_scripts/
+```
+
+```
 chmod +x generate_certs.sh
 cd /home/ubuntu
 ```
